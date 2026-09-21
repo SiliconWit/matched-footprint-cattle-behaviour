@@ -1,0 +1,53 @@
+cff-version: 1.2.0
+title: "Matched footprint: distillation, pruning and the same-size control for on-collar cattle behaviour classification"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - given-names: Bright Mutuma
+    family-names: "Gitari"
+    affiliation: "Department of Mechatronic Engineering, School of Engineering, Dedan Kimathi University of Technology"
+  - given-names: Ying-Hsuan
+    family-names: "Chiang"
+    affiliation: "RWTH Aachen University"
+  - given-names: Consolata Wanjiru
+    family-names: "Kiiru"
+    affiliation: "Jomo Kenyatta University of Agriculture and Technology"
+  - given-names: Samuel Macharia
+    family-names: "Kang'iri"
+    affiliation: "Department of Mechatronic Engineering, School of Engineering, Dedan Kimathi University of Technology"
+    orcid: "https://orcid.org/0000-0002-7326-7502"
+repository-code: "https://github.com/SiliconWit/matched-footprint-cattle-behaviour"
+license: MIT
+keywords:
+  - knowledge distillation
+  - structured pruning
+  - TinyML
+  - precision livestock farming
+  - dataset integrity
+references:
+  - type: dataset
+    title: "Japanese Black beef cow behavior classification dataset"
+    authors:
+      - family-names: Ito
+        given-names: H.
+      - family-names: Takeda
+        given-names: K.-I.
+      - family-names: Tokgoz
+        given-names: K. K.
+      - family-names: Minati
+        given-names: L.
+    doi: 10.5281/zenodo.5399259
+    year: 2021
+  - type: dataset
+    title: "Accelerometer-based multivariate time-series dataset for calf behavior classification"
+    authors:
+      - family-names: Dissanayake
+        given-names: O.
+      - family-names: McPherson
+        given-names: S. E.
+      - family-names: "Allyndrée"
+        given-names: J.
+      - family-names: Kennedy
+        given-names: E.
+    doi: 10.5281/zenodo.13259482
+    year: 2024

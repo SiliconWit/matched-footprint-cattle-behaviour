@@ -1,0 +1,10 @@
+numpy>=1.21
+scipy>=1.7
+scikit-learn>=1.0
+torch>=2.0
+matplotlib>=3.4
+pyyaml>=5.4
+pytest>=7.0
+# only for exporting models to the board
+# onnx
+# onnxscript
