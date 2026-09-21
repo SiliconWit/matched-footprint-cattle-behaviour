@@ -2,7 +2,9 @@
 number is generated from.
 
 Reads results/integrity.json, frontier.json, leak.json, calf.json and grid.json (seed
-0), and every results/seed-N/ directory that holds further seeds of the same runs.
+0), every results/seed-N/ directory that holds further seeds of the same runs, and
+every results/equal-seed-N/ directory that holds a frontier run with
+--equal-schedule.
 No reported number is computed anywhere else: build_numbers.py turns
 summary.json into LaTeX macros and make_figs.py draws the figures from it.
 
@@ -14,6 +16,9 @@ from scipy import stats
 import data as D
 
 ROUTES = ["distil", "prune", "scratch"]
+# a paired cell (width, held-out animal) counts as a collapse of the pruned network when
+# it scores more than this much macro F1 below the same-size control
+COLLAPSE = 0.10
 
 
 def load(name, res=D.RESULTS):
@@ -119,7 +124,14 @@ def summarise_frontier(rows, value="macro_f1"):
         [dict(kb=float(kb[w]), gain=float(np.mean([c["prune"] - c["scratch"]
                                                    for (ww, _), c in piv.items() if ww == w])))
          for w in widths], key=lambda d: -d["kb"])
+    S["prune_collapses"] = collapses(piv)
     return S
+
+
+def collapses(piv):
+    """The paired cells in which pruning falls more than COLLAPSE below the same-size
+    control, as (widths, held-out animal) pairs."""
+    return [list(k) for k, c in piv.items() if c["prune"] - c["scratch"] < -COLLAPSE]
 
 
 def summarise_integrity(integ):
@@ -215,6 +227,7 @@ def seed_summary(res, frontier=None):
         out.update(teacher=f["teacher"]["macro_f1"], paired=f["paired"],
                    capacity_deficit_max=f["capacity_deficit_max"],
                    prune_gain_by_kb=f["prune_gain_by_kb"],
+                   prune_collapses=f["prune_collapses"],
                    between_animal_sd=f["between_animal_sd"])
         if all("macro_f1_present" in r for r in front["rows"]):
             out["paired_present"] = summarise_frontier(front["rows"], "macro_f1_present")["paired"]
@@ -231,6 +244,29 @@ def seed_summary(res, frontier=None):
         c = summarise_calf(calf["rows"])
         out["calf"] = dict(paired=c["paired"], teacher=c["teacher"],
                            capacity_deficit=c["capacity_deficit"])
+    return out
+
+
+def equal_summary(eq_rows, std_rows=None):
+    """One --equal-schedule frontier run: its routes against its own same-size control,
+    and, given the standard run at the same seed, the pruned network under the two
+    schedules compared cell by cell.
+
+    The teacher and the distilled networks are identical in the two runs. The same-size
+    network is built after the pruned one is trained, so a longer pruning schedule
+    advances the generator further and gives it different initial weights;
+    `scratch_vs_standard` measures how much that alone moves it.
+    """
+    f = summarise_frontier(eq_rows)
+    out = dict(paired=f["paired"], prune_gain_by_kb=f["prune_gain_by_kb"],
+               prune_collapses=f["prune_collapses"])
+    if std_rows:
+        eq, std = pivot(eq_rows), pivot(std_rows)
+        keys = [k for k in eq if k in std]
+        out["prune_vs_standard"] = paired([eq[k]["prune"] for k in keys],
+                                          [std[k]["prune"] for k in keys])
+        out["scratch_vs_standard"] = paired([eq[k]["scratch"] for k in keys],
+                                            [std[k]["scratch"] for k in keys])
     return out
 
 
@@ -266,6 +302,21 @@ def main(res=D.RESULTS):
         if m and os.path.isdir(os.path.join(res, d)):
             seeds[m.group(1)] = seed_summary(os.path.join(res, d))
     S["seeds"] = seeds
+
+    # the frontier with the pruned network fine-tuned on the other routes' schedule,
+    # each seed in results/equal-seed-N/, beside the standard run at the same seed
+    equal = {}
+    for d in sorted(os.listdir(res)):
+        m = re.fullmatch(r"equal-seed-(\d+)", d)
+        eq = load("frontier", os.path.join(res, d)) if m else None
+        if eq:
+            k = m.group(1)
+            std = front if k == "0" else load("frontier", os.path.join(res, "seed-" + k))
+            equal[k] = equal_summary(eq["rows"], std["rows"] if std else None)
+    S["equal_schedule"] = equal
+    S["run_dates"] = sorted({m["date"] for d in [res] + [os.path.join(res, x)
+                                                           for x in os.listdir(res)]
+                             if os.path.isdir(d) for m in run_meta(d).values()})
 
     json.dump(S, open(os.path.join(res, "summary.json"), "w"), indent=1)
     print(f"wrote summary.json in {res} ({len(seeds)} seed(s))")

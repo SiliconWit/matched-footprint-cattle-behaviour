@@ -139,6 +139,7 @@ if G:
 
 cf = S.get("calf")
 if cf:
+    cmd("CalfPairedN", cf["paired"]["prune"]["n"])
     cmd("CalfFolds", cf["n_folds"]); cmd("CalfMajority", f3(cf["majority_f1"]))
     for r, tag in (("prune", "Prune"), ("distil", "Distil"), ("scratch", "Scratch")):
         cmd(f"Calf{tag}F", f3(cf["by_route"][r]))
@@ -195,6 +196,10 @@ cmd("DistilPSeedMin", p(min(seeds[k]["paired"]["distil"]["p_t"] for k in front_s
 cmd("PruneSigSeeds", word(sum(seeds[k]["paired"]["prune"]["p_t"] < 0.05 and
                                seeds[k]["paired"]["prune"]["mean"] > 0 for k in front_seeds)))
 cmd("DistilSigSeeds", word(sum(seeds[k]["paired"]["distil"]["p_t"] < 0.05 for k in front_seeds)))
+cmd("PruneNegSeeds", word(sum(seeds[k]["paired"]["prune"]["mean"] < 0 for k in front_seeds)))
+cmd("DistilPosSeeds", word(sum(seeds[k]["paired"]["distil"]["mean"] > 0 for k in front_seeds)))
+cmd("DistilGainSeedMean", sg(float(np.mean([seeds[k]["paired"]["distil"]["mean"]
+                                            for k in front_seeds])), 4))
 cmd("PruneGainSeedMean", sg(float(np.mean([seeds[k]["paired"]["prune"]["mean"]
                                            for k in front_seeds])), 4))
 worst = min(front_seeds, key=lambda k: seeds[k]["paired"]["prune"]["mean"])
@@ -219,6 +224,8 @@ if calf_seeds:
     worse = [k for k in calf_seeds if seeds[k]["calf"]["paired"]["prune"]["mean"] < 0
              and seeds[k]["calf"]["paired"]["prune"]["p_t"] < 0.05]
     cmd("CalfPruneWorseN", word(len(worse)))
+    cmd("CalfPruneNegSeeds", word(sum(seeds[k]["calf"]["paired"]["prune"]["mean"] < 0
+                                      for k in calf_seeds)))
     if worse:
         cmd("CalfPruneWorseP", p(min(seeds[k]["calf"]["paired"]["prune"]["p_t"] for k in worse)))
 # pruning's margin at each footprint, as a range over seeds
@@ -240,7 +247,61 @@ if kbs:
                     for k in front_seeds}, reverse=True)
     cmd("PruneGainPeakKBs", ", ".join(f"{v:.2f}" for v in peaks))
 
-dates = sorted(m["date"] for m in meta.values() if "date" in m)
+# pruning collapses: paired cells more than analyse.COLLAPSE below the same-size control
+import analyse as A
+cmd("CollapseThresh", f"{A.COLLAPSE:.2f}")
+ncol = {k: len(seeds[k]["prune_collapses"]) for k in front_seeds}
+cmd("CollapseCells", ncol and sum(ncol.values()))
+cmd("CollapseSeeds", word(sum(1 for v in ncol.values() if v)))
+allcol = [c for k in front_seeds for c in seeds[k]["prune_collapses"]]
+kb_of = {r["widths"]: r["kb"] for r in S["frontier"]}
+ckb = sorted({kb_of[w] for w, _ in allcol}, reverse=True)
+cmd("CollapseKBs", " and ".join(f"{v:.2f}" for v in ckb) if ckb else "none")
+cmd("CollapseNWidths", word(len(ckb)))
+cmd("CollapseAnimals", word(len({h for _, h in allcol})))
+cmd("CollapseWorstSeedCells", ncol.get(worst, 0))
+cmd("CollapseWorstSeedAnimals", word(len({h for _, h in seeds[worst]["prune_collapses"]})))
+
+# the pruned network fine-tuned on the other routes' schedule
+E = S.get("equal_schedule", {})
+eq_seeds = sorted(E, key=int)
+if eq_seeds:
+    cmd("NEqualSeeds", word(len(eq_seeds)))
+    cmd("EqualSeedList", ", ".join(eq_seeds[:-1]) + (" and " if len(eq_seeds) > 1 else "")
+        + eq_seeds[-1])
+    em = [E[k]["paired"]["prune"]["mean"] for k in eq_seeds]
+    span("EqPruneGainSeed", em, 4)
+    span("StdPruneGainEqSeeds", [seeds[k]["paired"]["prune"]["mean"] for k in eq_seeds
+                                 if k in seeds and "paired" in seeds[k]], 4)
+    cmd("EqPruneGainSeedMean", sg(float(np.mean(em)), 4))
+    cmd("StdPruneGainEqSeedsMean", sg(float(np.mean(
+        [seeds[k]["paired"]["prune"]["mean"] for k in eq_seeds if k in seeds])), 4))
+    cmd("EqPruneSigSeeds", word(sum(E[k]["paired"]["prune"]["p_t"] < 0.05 and
+                                    E[k]["paired"]["prune"]["mean"] > 0 for k in eq_seeds)))
+    cmd("EqPruneLossSeeds", word(sum(E[k]["paired"]["prune"]["p_t"] < 0.05 and
+                                     E[k]["paired"]["prune"]["mean"] < 0 for k in eq_seeds)))
+    cmd("EqPrunePSeedMax", p(max(E[k]["paired"]["prune"]["p_t"] for k in eq_seeds)))
+    cmd("EqPrunePSeedMin", p(min(E[k]["paired"]["prune"]["p_t"] for k in eq_seeds)))
+    span("EqDistilGainSeed", [E[k]["paired"]["distil"]["mean"] for k in eq_seeds], 4)
+    cmd("EqCollapseCells", sum(len(E[k]["prune_collapses"]) for k in eq_seeds))
+    cmd("EqCollapseSeeds", word(sum(1 for k in eq_seeds if E[k]["prune_collapses"])))
+    cmd("StdCollapseCellsEqSeeds", sum(ncol.get(k, 0) for k in eq_seeds))
+    span("EqPruneGainWidthSeed", [r["gain"] for k in eq_seeds for r in E[k]["prune_gain_by_kb"]])
+    vs = [k for k in eq_seeds if "prune_vs_standard" in E[k]]
+    span("EqVsStdPrune", [E[k]["prune_vs_standard"]["mean"] for k in vs], 4)
+    span("ScratchInitShift", [E[k]["scratch_vs_standard"]["mean"] for k in vs], 4)
+    cmd("ScratchInitShiftAbsMax", f"{max(abs(E[k]['scratch_vs_standard']['mean']) for k in vs):.4f}")
+    if worst in E:
+        e = E[worst]
+        cmd("EqPruneGainAtWorst", sg(e["paired"]["prune"]["mean"], 4))
+        cmd("EqPrunePAtWorst", p(e["paired"]["prune"]["p_t"]))
+        cmd("EqCollapseAtWorst", len(e["prune_collapses"]))
+        cmd("EqPruneGainWidthAtWorstLo", sg(min(r["gain"] for r in e["prune_gain_by_kb"])))
+        if "prune_vs_standard" in e:
+            cmd("EqVsStdPruneAtWorst", sg(e["prune_vs_standard"]["mean"], 4))
+            cmd("EqVsStdPrunePAtWorst", p(e["prune_vs_standard"]["p_t"]))
+
+dates = S.get("run_dates") or sorted(m["date"] for m in meta.values() if "date" in m)
 cmd("RunStamp", dates[0] if dates[0] == dates[-1] else f"{dates[0]} to {dates[-1]}")
 cmd("NumpyVer", meta["frontier"]["numpy"])
 cmd("TorchVer", meta["frontier"]["torch"])

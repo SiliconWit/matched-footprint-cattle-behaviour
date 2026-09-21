@@ -33,3 +33,12 @@ def test_the_leak_is_priced_on_matched_runs_only():
     leaky = _rows({("(16, 32, 32)", "0", "scratch"): 0.7, ("(16, 32, 32)", "1", "scratch"): 0.9})
     out = A.summarise_leak(leaky, clean)
     assert out["n"] == 2 and abs(out["mean"] - 0.25) < 1e-12
+
+
+def test_a_collapse_is_a_cell_far_below_the_same_size_control():
+    vals = {}
+    for h, gap in zip("012", (0.05, -0.05, -0.2)):
+        vals[("(8, 16, 16)", h, "scratch")] = 0.6
+        vals[("(8, 16, 16)", h, "distil")] = 0.6
+        vals[("(8, 16, 16)", h, "prune")] = 0.6 + gap
+    assert A.collapses(A.pivot(_rows(vals))) == [["(8, 16, 16)", "2"]]

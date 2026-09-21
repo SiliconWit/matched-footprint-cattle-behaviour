@@ -40,3 +40,9 @@ def test_one_fold_returns_every_route_at_every_width():
         for route in ("distil", "prune", "scratch"):
             assert (route, w) in routes
     assert all(r["hold"] == "1" for r in rows)
+
+
+def test_equal_schedule_gives_pruning_the_other_routes_schedule():
+    import train as TR
+    assert R.prune_schedule(30) == (R.prune_epochs(30), R.PRUNE_LR)
+    assert R.prune_schedule(30, equal=True) == (30, TR.LR)

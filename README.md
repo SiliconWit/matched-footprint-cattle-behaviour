@@ -42,14 +42,18 @@ python3 make_figs.py
 The full sequence takes about two hours on an eight-core CPU. Scripts that train take
 `--seed` and `--out`; running `run_frontier.py`, `run_leak.py` and `run_calf.py` with
 `--seed N --out ../results/seed-N` and then the last three commands adds the spread over
-seeds. `run_board.py` exports models for measurement on a microcontroller and needs the
+seeds. `run_frontier.py --equal-schedule --seed N --out ../results/equal-seed-N` fine-tunes
+the pruned network for the same epochs and at the same learning rate as the other two
+routes; `analyse.py` compares each such run with the standard one at the same seed.
+Every run script takes `--procs` to set the number of worker processes. `run_board.py`
+exports models for measurement on a microcontroller and needs the
 `onnx` and `onnxscript` packages.
 
 ## Outputs
 
 Everything is written to `results/`: one JSON file per experiment, `summary.json`,
-`numbers.tex` (every reported value as a LaTeX macro), `frontier_table.tex` and the
-figures in `results/figs/`.
+`numbers.tex` (every reported value as a LaTeX macro), `frontier_table.tex`,
+`seed_table.tex` (per-seed paired differences) and the figures in `results/figs/`.
 
 ## Citation
 

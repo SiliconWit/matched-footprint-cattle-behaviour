@@ -97,8 +97,12 @@ def fig_frontier(path, beef, calf, teacher_beef, teacher_calf, maj_beef, maj_cal
     _save(fig, path)
 
 
-def fig_paired(path, per_animal, gain_by_kb, calf_gain, between_animal):
-    """The effect is small, the animal effect is not, and pairing is what separates them."""
+def fig_paired(path, per_animal, gain_by_kb, calf_gain, between_animal, equal_by_kb=None):
+    """The effect is small, the animal effect is not, and pairing is what separates them.
+
+    `gain_by_kb` maps each training seed to pruning's margin by footprint; `equal_by_kb`
+    does the same for the runs with the pruned network on the other routes' schedule.
+    """
     fig, ax = plt.subplots(1, 3, figsize=(W, H3))
 
     for i, (key, lab) in enumerate([("prune", "pruning"), ("distil", "distillation")]):
@@ -111,13 +115,22 @@ def fig_paired(path, per_animal, gain_by_kb, calf_gain, between_animal):
     ax[0].set_ylabel("macro F1 minus same-size control")
     ax[0].set_title("paired differences, beef", pad=4)
 
-    kb = [r["kb"] for r in gain_by_kb]
-    gn = [r["gain"] for r in gain_by_kb]
-    ax[1].semilogx(kb, gn, color=NAVY, marker="o", ms=3.4)
+    handles = []
+    for runs, col, ls, lab in ((gain_by_kb, NAVY, "-", "standard schedule"),
+                               (equal_by_kb or {}, GREEN, "--", "equal schedule")):
+        for seed, rows in sorted(runs.items()):
+            ax[1].semilogx([r["kb"] for r in rows], [r["gain"] for r in rows], color=col,
+                           ls=ls, lw=0.9, marker="o", ms=2.2, alpha=0.85)
+        if runs:
+            handles.append(Line2D([], [], color=col, ls=ls, lw=0.9, marker="o", ms=2.2,
+                                  label=lab))
     ax[1].axhline(0, color=SLATE, lw=0.8)
     ax[1].set_xlabel("footprint (KB, int8)")
     ax[1].set_ylabel("pruning advantage")
-    ax[1].set_title("pruning margin by footprint", pad=4)
+    ax[1].set_title("pruning margin, every seed", pad=4)
+    if len(handles) > 1:
+        ax[1].legend(handles=handles, loc="lower right", frameon=False, fontsize=6.4,
+                     handlelength=2.0, borderaxespad=0.2)
 
     ax[2].bar([0, 1], [between_animal, abs(np.mean(per_animal["prune"]))], 0.55,
               color=[SLATE, NAVY], edgecolor="none")

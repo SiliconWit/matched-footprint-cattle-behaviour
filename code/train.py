@@ -151,11 +151,14 @@ def save(name, rows, config, out_dir=None):
     return path
 
 
-def cli(default_seed=0):
-    """--seed, --out and --procs for every run script."""
+def cli(default_seed=0, equal_schedule=False):
+    """--seed, --out and --procs for every run script, and --equal-schedule if asked for."""
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=default_seed)
     ap.add_argument("--out", default=None, help="results directory")
     ap.add_argument("--procs", type=int, default=6)
+    if equal_schedule:
+        ap.add_argument("--equal-schedule", action="store_true",
+                        help="fine-tune the pruned network on the other routes' schedule")
     return ap.parse_args()

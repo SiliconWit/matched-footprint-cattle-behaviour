@@ -21,6 +21,16 @@ def prune_epochs(epochs):
     return max(8, epochs // 2)
 
 
+def prune_schedule(epochs, equal=False):
+    """(epochs, learning rate) for fine-tuning the pruned network.
+
+    The default is prune_epochs(epochs) at PRUNE_LR. With `equal`, the pruned network
+    fine-tunes for the full `epochs` at TR.LR, the schedule the other two routes train
+    with, so it differs from the same-size network only in its starting weights.
+    """
+    return (epochs, TR.LR) if equal else (prune_epochs(epochs), PRUNE_LR)
+
+
 def distillation_loss(logits, teacher_logits, target, T=4.0, alpha=0.5):
     """alpha * T^2 * KL(teacher_T || small_T) + (1 - alpha) * CE(small, target).
 
@@ -77,17 +87,19 @@ def transfer_surviving_channels(src, dst):
 
 
 def run_fold(X, y, a, hold, widths_list, n_classes, epochs=TR.EPOCHS, T=4.0,
-             alpha=0.5, seed=0, grid=None):
+             alpha=0.5, seed=0, grid=None, equal_schedule=False):
     """Teacher plus, at every width, distillation, pruning and the same-size control.
 
     Returns one row per trained model, every model scored after int8 weight
     quantisation. `grid`, if given, is a list of (T, alpha) pairs and replaces the
-    single distillation setting.
+    single distillation setting. `equal_schedule` gives the pruning route the same
+    fine-tuning schedule as the others (see prune_schedule).
 
     What each route gets:
       distillation  `epochs` at TR.LR, teacher logits, no class weights
       pruning       teacher's surviving channels, then prune_epochs(epochs) epochs at
-                    PRUNE_LR, class weights
+                    PRUNE_LR (or `epochs` at TR.LR with `equal_schedule`), class
+                    weights
       same size     fresh initialisation, `epochs` at TR.LR, class weights
 
     Every network is built in a fixed order, and building one advances the random
@@ -116,7 +128,8 @@ def run_fold(X, y, a, hold, widths_list, n_classes, epochs=TR.EPOCHS, T=4.0,
 
         p = M.AccNet(w, n_classes)
         transfer_surviving_channels(teacher, p)
-        TR.fit(p, Xtr, ytr, epochs=prune_epochs(epochs), lr=PRUNE_LR, seed=seed, class_weight=cw)
+        pe, plr = prune_schedule(epochs, equal_schedule)
+        TR.fit(p, Xtr, ytr, epochs=pe, lr=plr, seed=seed, class_weight=cw)
         rows.append(TR.row("prune", w, hold, fpw,
                            TR.evaluate(M.quantise_int8(p), Xte, yte, n_classes), seed=seed))
 
